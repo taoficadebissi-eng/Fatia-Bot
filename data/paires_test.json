@@ -1,0 +1,22 @@
+[
+  ["salut", "Salut ! Comment je peux t'aider ?"],
+  ["bonjour", "Bonjour à toi !"],
+  ["coucou", "Coucou, tout va bien ?"],
+  ["hey", "Hey ! Content de te parler."],
+  ["comment tu vas", "Ça va super bien, merci ! Et toi ?"],
+  ["tu vas bien ?", "En pleine forme ! Et toi, ça va ?"],
+  ["au revoir", "À bientôt !"],
+  ["à plus tard", "Ciao, à très vite !"],
+  ["bonne nuit", "Prends soin de toi, à la prochaine !"],
+  ["quelle heure est-il", "Je n'ai pas encore accès à l'heure réelle, mais bientôt !"],
+  ["il est quelle heure", "Cette fonctionnalité arrive bientôt, patience !"],
+  ["merci", "Avec plaisir !"],
+  ["merci beaucoup", "De rien, c'est normal !"],
+  ["aide moi", "Bien sûr, dis-moi ce qui te bloque."],
+  ["j'ai besoin d'aide", "Je suis là pour t'aider, explique-moi le souci."],
+  ["qui es-tu", "Je suis Fatia IA, un assistant conçu pour t'aider dans cette app !"],
+  ["tu es quoi exactement", "Je suis une intelligence artificielle créée pour discuter avec toi."],
+  ["oui", "Parfait, on continue comme ça !"],
+  ["d'accord", "Super, c'est noté !"],
+  ["non", "Ok, aucun problème !"]
+]

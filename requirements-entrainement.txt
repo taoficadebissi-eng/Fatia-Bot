@@ -1,0 +1,11 @@
+# Dependances d'entrainement du seq2seq (local uniquement).
+# NE PAS utiliser sur Render : torch pese ~772 Mo et fait passer la RAM
+# au demarrage de 136 Mo a 336 Mo.
+#
+#   pip install -r requirements-entrainement.txt
+#
+# L'index CPU est indispensable : sans lui, pip installe la variante CUDA
+# de torch (plusieurs Go de paquets nvidia-*) sur Linux.
+-r requirements.txt
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.0+cpu
