@@ -11,6 +11,16 @@ DOSSIER_MODELE_SEQ2SEQ = RACINE / "modeles"
 TEMPERATURE_PAR_DEFAUT = 0.0
 LONGUEUR_MAX_ENTREE = 2000
 
+# En dessous de ce seuil, le classifieur n'a aucun signal exploitable : les
+# entrées sans aucun mot connu tombent toutes à ~16 %, alors que les prédictions
+# correctes sur des formulations inédites restent au-dessus de 25 %.
+SEUIL_CONFIANCE = 0.22
+MESSAGES_INCOMPRIS = [
+    "Je n'ai pas bien compris. Tu peux reformuler ?",
+    "Désolé, je n'ai pas saisi. Tu peux le dire autrement ?",
+    "Là je sèche ! Reformule et je réessaie.",
+]
+
 app = Flask(__name__)
 CORS(app)  # Autorise les requêtes venant d'autres origines (comme Flutter Web)
 
@@ -67,13 +77,23 @@ def predire():
         return erreur
 
     X_phrase = vectorizer.transform([texte])
-    intention = model.predict(X_phrase)[0]
-    reponse = random.choice(reponses[intention])
+    probabilites = model.predict_proba(X_phrase)[0]
+    indice = probabilites.argmax()
+    intention = model.classes_[indice]
+    confiance = float(probabilites[indice])
+
+    # Aucun mot connu, ou confiance trop faible : mieux vaut l'admettre que
+    # servir une reponse tiree au hasard parmi les intentions les moins improbables.
+    # nnz plutot que sum() : sum() renvoie un booleen numpy que jsonify refuse.
+    repli = X_phrase.nnz == 0 or confiance < SEUIL_CONFIANCE
+    reponse = random.choice(MESSAGES_INCOMPRIS if repli else reponses[intention])
 
     return jsonify({
         "texte_recu": texte,
         "intention": intention,
         "reponse": reponse,
+        "confiance": round(confiance, 3),
+        "repli": repli,
     })
 
 
