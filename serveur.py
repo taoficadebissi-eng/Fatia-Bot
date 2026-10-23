@@ -5,15 +5,15 @@ from pathlib import Path
 import joblib
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from google import genai
+from google.genai import types
 
 RACINE = Path(__file__).resolve().parent
-DOSSIER_MODELE_SEQ2SEQ = RACINE / "modeles"
-TEMPERATURE_PAR_DEFAUT = 0.0
+TEMPERATURE_PAR_DEFAUT = 0.7
 LONGUEUR_MAX_ENTREE = 2000
+MODELE_GEMINI = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+LLM_API_KEY = os.environ.get("LLM_API_KEY")
 
-# En dessous de ce seuil, le classifieur n'a aucun signal exploitable : les
-# entrées sans aucun mot connu tombent toutes à ~16 %, alors que les prédictions
-# correctes sur des formulations inédites restent au-dessus de 25 %.
 SEUIL_CONFIANCE = 0.22
 MESSAGES_INCOMPRIS = [
     "Je n'ai pas bien compris. Tu peux reformuler ?",
@@ -22,21 +22,14 @@ MESSAGES_INCOMPRIS = [
 ]
 
 app = Flask(__name__)
-CORS(app)  # Autorise les requêtes venant d'autres origines (comme Flutter Web)
+CORS(app)
 
 model = joblib.load(RACINE / "modele_intention.pkl")
 vectorizer = joblib.load(RACINE / "vectorizer_intention.pkl")
 reponses = joblib.load(RACINE / "reponses_intention.pkl")
 
-# Le seq2seq n'existe qu'une fois `entrainer.py` lancé : le serveur doit démarrer sans.
-repondeur = None
-erreur_seq2seq = None
-try:
-    from fatia.generation import Repondeur
-
-    repondeur = Repondeur(DOSSIER_MODELE_SEQ2SEQ)
-except Exception as exception:
-    erreur_seq2seq = f"{type(exception).__name__}: {exception}"
+# Le client Gemini est créé uniquement si la clé est présente dans l'environnement.
+gemini_client = genai.Client(api_key=LLM_API_KEY) if LLM_API_KEY else None
 
 
 def lire_texte():
@@ -63,10 +56,13 @@ def sante():
     return jsonify({
         "classifieur": True,
         "intentions": sorted(reponses),
-        "seq2seq": repondeur is not None,
-        "seq2seq_epoch": repondeur.epoch if repondeur else None,
-        "seq2seq_perte_validation": repondeur.perte_validation if repondeur else None,
-        "seq2seq_erreur": erreur_seq2seq,
+        "gemini_configure": gemini_client is not None,
+        "gemini_modele": MODELE_GEMINI,
+        # Champs historiques conservés pour compatibilité avec les clients existants.
+        "seq2seq": False,
+        "seq2seq_epoch": None,
+        "seq2seq_perte_validation": None,
+        "seq2seq_erreur": None,
     })
 
 
@@ -81,10 +77,6 @@ def predire():
     indice = probabilites.argmax()
     intention = model.classes_[indice]
     confiance = float(probabilites[indice])
-
-    # Aucun mot connu, ou confiance trop faible : mieux vaut l'admettre que
-    # servir une reponse tiree au hasard parmi les intentions les moins improbables.
-    # nnz plutot que sum() : sum() renvoie un booleen numpy que jsonify refuse.
     repli = X_phrase.nnz == 0 or confiance < SEUIL_CONFIANCE
     reponse = random.choice(MESSAGES_INCOMPRIS if repli else reponses[intention])
 
@@ -99,30 +91,52 @@ def predire():
 
 @app.route("/discuter", methods=["POST"])
 def discuter():
-    if repondeur is None:
-        return jsonify({
-            "erreur": "Modèle seq2seq non chargé. Lance d'abord entrainer.py.",
-            "detail": erreur_seq2seq,
-        }), 503
-
     texte, erreur = lire_texte()
     if erreur:
         return erreur
 
+    if gemini_client is None:
+        return jsonify({
+            "erreur": "Gemini n'est pas configuré : la variable LLM_API_KEY est absente."
+        }), 503
+
     donnees = request.get_json(silent=True) or {}
     temperature = donnees.get("temperature", TEMPERATURE_PAR_DEFAUT)
-    if not isinstance(temperature, (int, float)) or not 0 <= temperature <= 5:
-        return jsonify({"erreur": "temperature doit être un nombre entre 0 et 5"}), 400
+    if not isinstance(temperature, (int, float)) or isinstance(temperature, bool) or not 0 <= temperature <= 2:
+        return jsonify({"erreur": "temperature doit être un nombre entre 0 et 2"}), 400
 
-    resultat = repondeur.repondre(texte, temperature=float(temperature))
+    try:
+        resultat = gemini_client.models.generate_content(
+            model=MODELE_GEMINI,
+            contents=texte,
+            config=types.GenerateContentConfig(
+                temperature=float(temperature),
+                system_instruction=(
+                    "Tu es Fatia, un assistant conversationnel utile, naturel et respectueux. "
+                    "Réponds en français, sauf si l'utilisateur écrit clairement dans une autre langue. "
+                    "Réponds directement à la question, avec des explications adaptées et sans inventer "
+                    "des faits. Tu n'as pas accès aux conversations précédentes sauf si elles sont "
+                    "incluses dans le message reçu."
+                ),
+            ),
+        )
+        reponse = (resultat.text or "").strip()
+        if not reponse:
+            return jsonify({"erreur": "Gemini n'a renvoyé aucun texte exploitable."}), 502
 
-    return jsonify({
-        "texte_recu": texte,
-        "reponse": resultat["reponse"],
-        "repli": resultat["repli"],
-        "tokens_inconnus": resultat["tokens_inconnus"],
-        "tokens_total": resultat["tokens_total"],
-    })
+        return jsonify({
+            "texte_recu": texte,
+            "reponse": reponse,
+            "repli": False,
+            "tokens_inconnus": 0,
+            "tokens_total": 0,
+        })
+    except Exception as exception:
+        app.logger.exception("Erreur lors de l'appel à Gemini")
+        return jsonify({
+            "erreur": "Le service Gemini n'a pas pu générer de réponse.",
+            "detail": f"{type(exception).__name__}: {exception}",
+        }), 502
 
 
 if __name__ == "__main__":
