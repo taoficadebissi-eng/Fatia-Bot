@@ -65,6 +65,39 @@ gemini_client = (
 )
 
 
+# Mémoire de la conversation : l'app peut envoyer les derniers échanges avec
+# chaque question (champ « historique »), pour que Fatia comprenne la suite
+# (« et à Porto-Novo ? » après une question sur Cotonou).
+HISTORIQUE_MAX_MESSAGES = 10
+
+
+def lire_historique(donnees):
+    """Transforme le champ « historique » reçu en messages pour Gemini.
+
+    Format attendu : [{"role": "user" | "bot", "texte": "..."}, ...], du plus
+    ancien au plus récent. Tout élément mal formé est ignoré ; on ne garde que
+    les HISTORIQUE_MAX_MESSAGES derniers, chacun coupé à LONGUEUR_MAX_ENTREE."""
+    brut = donnees.get("historique")
+    if not isinstance(brut, list):
+        return []
+    messages = []
+    for element in brut[-HISTORIQUE_MAX_MESSAGES:]:
+        if not isinstance(element, dict):
+            continue
+        texte = element.get("texte")
+        role = element.get("role")
+        if not isinstance(texte, str) or not texte.strip() or role not in ("user", "bot"):
+            continue
+        messages.append(
+            types.Content(
+                # Pour Gemini, ses propres réponses ont le rôle « model ».
+                role="user" if role == "user" else "model",
+                parts=[types.Part(text=texte.strip()[:LONGUEUR_MAX_ENTREE])],
+            )
+        )
+    return messages
+
+
 def lire_texte():
     """Valide l'entrée. Renvoie (texte, réponse_erreur) — l'un des deux est None."""
     data = request.get_json(silent=True)
@@ -141,7 +174,9 @@ def discuter():
     try:
         resultat = gemini_client.models.generate_content(
             model=MODELE_GEMINI,
-            contents=texte,
+            # Les échanges précédents (s'il y en a), puis la nouvelle question.
+            contents=lire_historique(donnees)
+            + [types.Content(role="user", parts=[types.Part(text=texte)])],
             config=types.GenerateContentConfig(
                 temperature=float(temperature),
                 # Les modèles Gemini 3 « réfléchissent » avant de répondre
@@ -155,8 +190,8 @@ def discuter():
                     "Tu es Fatia, un assistant conversationnel utile, naturel et respectueux. "
                     "Réponds en français, sauf si l'utilisateur écrit clairement dans une autre langue. "
                     "Réponds directement à la question, avec des explications adaptées et sans inventer "
-                    "des faits. Tu n'as pas accès aux conversations précédentes sauf si elles sont "
-                    "incluses dans le message reçu. "
+                    "des faits. Les derniers messages de la conversation peuvent t'être fournis "
+                    "avant la question : sers-t'en pour comprendre la suite de l'échange. "
                     # L'app Nolia affiche du texte brut : sans cette consigne,
                     # Gemini écrit **gras**, # titres, etc., et les symboles
                     # apparaissent tels quels à l'écran.
