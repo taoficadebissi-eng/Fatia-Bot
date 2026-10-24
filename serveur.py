@@ -40,7 +40,8 @@ reponses = joblib.load(RACINE / "reponses_intention.pkl")
 DELAI_GEMINI_MS = int(os.environ.get("GEMINI_TIMEOUT_MS", "20000"))
 
 # Niveau de « réflexion » de Gemini avant de répondre (voir /discuter).
-NIVEAU_REFLEXION = os.environ.get("GEMINI_THINKING", "minimal").upper()
+# gemini-3.8-flash refuse MINIMAL (400 INVALID_ARGUMENT) : LOW est le plus bas.
+NIVEAU_REFLEXION = os.environ.get("GEMINI_THINKING", "low").upper()
 
 
 def options_http_gemini():
@@ -146,9 +147,9 @@ def discuter():
                 # Les modèles Gemini 3 « réfléchissent » avant de répondre
                 # (thinking). Utile pour un problème compliqué, mais beaucoup
                 # trop lent pour une discussion : même « Merci » dépassait 20 s.
-                # MINIMAL = réponse presque immédiate. Réglable sans toucher au
-                # code avec la variable Render GEMINI_THINKING (minimal, low,
-                # medium, high).
+                # LOW = réflexion courte, réponse rapide. Réglable sans toucher
+                # au code avec la variable Render GEMINI_THINKING (low, medium,
+                # high ; minimal selon le modèle).
                 thinking_config=types.ThinkingConfig(thinking_level=NIVEAU_REFLEXION),
                 system_instruction=(
                     "Tu es Fatia, un assistant conversationnel utile, naturel et respectueux. "
