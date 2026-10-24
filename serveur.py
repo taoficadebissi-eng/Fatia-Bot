@@ -156,7 +156,13 @@ def discuter():
                     "Réponds en français, sauf si l'utilisateur écrit clairement dans une autre langue. "
                     "Réponds directement à la question, avec des explications adaptées et sans inventer "
                     "des faits. Tu n'as pas accès aux conversations précédentes sauf si elles sont "
-                    "incluses dans le message reçu."
+                    "incluses dans le message reçu. "
+                    # L'app Nolia affiche du texte brut : sans cette consigne,
+                    # Gemini écrit **gras**, # titres, etc., et les symboles
+                    # apparaissent tels quels à l'écran.
+                    "Écris en texte simple, sans aucune mise en forme Markdown : pas d'astérisques, "
+                    "pas de dièses, pas de tableaux. Pour une liste, commence chaque ligne par un tiret. "
+                    "Reste concis : quelques phrases suffisent, sauf si on te demande plus de détails."
                 ),
             ),
         )
