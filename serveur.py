@@ -39,6 +39,9 @@ reponses = joblib.load(RACINE / "reponses_intention.pkl")
 # erreur JSON à temps, et l'app Nolia bascule sur /predire.
 DELAI_GEMINI_MS = int(os.environ.get("GEMINI_TIMEOUT_MS", "20000"))
 
+# Niveau de « réflexion » de Gemini avant de répondre (voir /discuter).
+NIVEAU_REFLEXION = os.environ.get("GEMINI_THINKING", "minimal").upper()
+
 
 def options_http_gemini():
     """Délai maximal + une seule tentative (pas de nouvelles tentatives
@@ -140,6 +143,13 @@ def discuter():
             contents=texte,
             config=types.GenerateContentConfig(
                 temperature=float(temperature),
+                # Les modèles Gemini 3 « réfléchissent » avant de répondre
+                # (thinking). Utile pour un problème compliqué, mais beaucoup
+                # trop lent pour une discussion : même « Merci » dépassait 20 s.
+                # MINIMAL = réponse presque immédiate. Réglable sans toucher au
+                # code avec la variable Render GEMINI_THINKING (minimal, low,
+                # medium, high).
+                thinking_config=types.ThinkingConfig(thinking_level=NIVEAU_REFLEXION),
                 system_instruction=(
                     "Tu es Fatia, un assistant conversationnel utile, naturel et respectueux. "
                     "Réponds en français, sauf si l'utilisateur écrit clairement dans une autre langue. "
