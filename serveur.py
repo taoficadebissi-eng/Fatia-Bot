@@ -32,8 +32,33 @@ model = joblib.load(RACINE / "modele_intention.pkl")
 vectorizer = joblib.load(RACINE / "vectorizer_intention.pkl")
 reponses = joblib.load(RACINE / "reponses_intention.pkl")
 
+# Délai maximal d'un appel à Gemini (en millisecondes). Sans limite, un appel
+# lent (quota dépassé, Google surchargé) dépassait les 30 s de gunicorn : le
+# serveur était coupé net et renvoyait une page « Internal Server Error »
+# (500) au lieu d'une erreur propre. Avec 20 s, /discuter répond toujours une
+# erreur JSON à temps, et l'app Nolia bascule sur /predire.
+DELAI_GEMINI_MS = int(os.environ.get("GEMINI_TIMEOUT_MS", "20000"))
+
+
+def options_http_gemini():
+    """Délai maximal + une seule tentative (pas de nouvelles tentatives
+    silencieuses qui allongent l'attente). `HttpRetryOptions` n'existe que dans
+    les versions récentes de google-genai : sinon, on garde seulement le délai."""
+    try:
+        return types.HttpOptions(
+            timeout=DELAI_GEMINI_MS,
+            retry_options=types.HttpRetryOptions(attempts=1),
+        )
+    except (AttributeError, TypeError, ValueError):
+        return types.HttpOptions(timeout=DELAI_GEMINI_MS)
+
+
 # Le client Gemini est créé uniquement si la clé est présente dans l'environnement.
-gemini_client = genai.Client(api_key=LLM_API_KEY) if LLM_API_KEY else None
+gemini_client = (
+    genai.Client(api_key=LLM_API_KEY, http_options=options_http_gemini())
+    if LLM_API_KEY
+    else None
+)
 
 
 def lire_texte():
