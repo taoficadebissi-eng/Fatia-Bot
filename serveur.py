@@ -11,7 +11,11 @@ from google.genai import types
 RACINE = Path(__file__).resolve().parent
 TEMPERATURE_PAR_DEFAUT = 0.7
 LONGUEUR_MAX_ENTREE = 2000
-MODELE_GEMINI = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+# Modèle Gemini utilisé par /discuter. On peut le changer sans toucher au code
+# avec la variable Render GEMINI_MODEL. « gemini-2.5-flash » n'est plus
+# proposé aux nouveaux comptes (erreur 404 NOT_FOUND) : Google recommande
+# « gemini-3.8-flash ».
+MODELE_GEMINI = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 LLM_API_KEY = os.environ.get("LLM_API_KEY")
 
 SEUIL_CONFIANCE = 0.22
